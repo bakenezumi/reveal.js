@@ -54,8 +54,28 @@ EmpDaoImpl.java
 ```java
 public class EmpDaoImpl
   extends org.seasar.doma.internal.jdbc.dao.AbstractDao
-  implements EmpDao { .../* 実装 */ }
+  implements EmpDao { .../* Dao実装 */ }
 ```
+
+
+
+DomaのAnnotation Processing
+-----
+Emp.java
+```java
+@Entity public classs EmpDao {
+    @Id int id;
+}
+```
+↓
+
+_Emp.java
+```java
+public final class _Emp
+  extends org.seasar.doma.jdbc.entity.AbstractEntityType<Emp> {
+    .../* Entityのヘルパー実装 */ }
+```
+
 
 
 
@@ -283,7 +303,7 @@ Step1 Daoの利用 (Scala)
 
 ```scala
 object SampleApp1 extends App {
-  lazy val dao: EmpDao = new EmpDaoImpl()
+  private lazy val dao: EmpDao = new EmpDaoImpl()
 
   AppConfig.singleton.getTransactionManager.required({ () =>
     // create table & insert
@@ -412,7 +432,561 @@ Step1の課題
 
 
 
+Step2
+-----
+Doma関連クラスもScalaで作る
 
 
+
+Step2 Entity (Scala)
+
+```scala
+// Doma2ではフィールドにアノテーションを付ける必要があるが
+// コンストラクタパラメータに対してアノテーションを付けると
+// パラメータに対してのみ有効になる
+// 下記のように@fieldと明示することで自動的に作られる同名の
+// 状態フィールドに対し アノテーションを有効にできる。
+// http://www.scala-lang.org/api/current/scala/annotation/meta/index.html
+@Entity(immutable = true)
+case class Emp(
+    @(Id @field)
+    @(GeneratedValue @field)(strategy = GenerationType.SEQUENCE)
+    @(SequenceGenerator @field)(sequence = "emp_id_seq")
+    id: ID[Emp],
+    name: String,
+    age: Int,
+    @(Version @field)
+    version: Int
+) {
+  def growOld: Emp = this.copy(age = this.age + 1)
+}
+
+```
+
+
+
+Step2 Domain  (Scala)
+
+```scala
+// Domainクラスにはgetter（getXx）が必要
+// @BeanPropertyはgetterとsetterを作ってくれるアノテーション
+@Domain(valueType = classOf[Long])
+case class ID[ENTITY](
+    @BeanProperty value: Long)
+```
+
+
+
+
+Step2 Dao (Scala)
+
+```scala
+// Scalaで作ったConfigはstaticメソッドを持てず
+// アノテーション引数に指定できないため
+// 利用者がコンストラクタパラメータで渡す
+@Dao
+trait EmpDao {
+  @Script
+  def create(): Unit
+
+  @Select
+  def selectById(id: ID[Emp]): Optional[Emp]
+
+  @Select
+  def selectAll: java.util.List[Emp]
+
+  @Insert
+  def insert(emp: Emp): Result[Emp]
+
+  @Update
+  def update(emp: Emp): Result[Emp]
+}
+```
+
+
+
+
+Step2 Config (Scala)
+
+```scala
+object AppConfig extends Config {
+  val dataSource = new LocalTransactionDataSource(
+    "jdbc:h2:mem:tutorial;DB_CLOSE_DELAY=-1",
+    "sa",
+    null)
+  val transactionManager = new LocalTransactionManager(
+    dataSource.getLocalTransaction(getJdbcLogger))
+
+  Class.forName("org.h2.Driver")
+
+  override def getDialect: Dialect = new H2Dialect()
+
+  override def getDataSource: DataSource = dataSource
+
+  override def getTransactionManager: TransactionManager = transactionManager
+}
+```
+
+
+
+
+Step2 Daoの利用 (Scala)
+
+```scala
+object SampleApp2 extends App {
+  private lazy val dao: EmpDao = new EmpDaoImpl(AppConfig)
+
+  AppConfig.getTransactionManager.required({ () =>
+    dao.create() // create table
+    val inserted = Seq(
+      Emp(ID[Emp](-1), "scott", 10, -1),
+      Emp(ID[Emp](-1), "allen", 20, -1)
+    ).map {
+      dao.insert
+    }
+    println(inserted)
+    // idが2のEmpのageを +1
+    val updated: Optional[Result[Emp]] = // Optionalは型推論効かない
+      dao
+        .selectById(ID(2))
+        .map { emp =>
+          dao.update(emp.growOld)
+        }
+    println(updated)
+    val list = dao.selectAll
+    list.forEach(println)
+    // =>
+    //   Emp(ID(1),scott,10,1)
+    //   Emp(ID(2),allen,21,2)
+  }: Runnable)
+}
+```
+
+
+
+ビルドがつらかった
+
+
+
+Annotation Processingはjavac時に行われるが、
+
+Doma関連クラスがScalaクラスになったため
+
+scalacがコンパイラになり
+
+javacがそもそも走らない
+
+
+
+
+Doma2のAnnotation Processingの流れ
+![javac](./doma-javac.png)
+
+<span style="font-size:60%">http://openjdk.java.net/groups/compiler/doc/compilation-overview/index.html </span>
+
+ 
+
+
+
+
+どうしたか
+
+
+
+
+ビルドを3フェーズに分けた
+
+1. Doma関連クラスのソース(`.scala`)をコンパイル
+
+1. Doma関連クラスの`.class`ファイルを-proc:onlyでjavacしてAnnotation Processingのみ行う
+
+1. 2.で自動生成されたソース(`.java`)と自動生成クラスの利用クラス(`.scala`)をコンパイル
+
+
+
+Step2のビルドの流れ
+![scalac](./doma-scalac.png)
+
+
+
+Step2 project構成
+```
+project-root/
+ - generate/         #自動生成先
+ -repository
+   - src/
+      - main/
+        - scala/     #Doma関連クラスのソース
+        - resources/ #SQLファイル
+   - target/
+      - scala-2.12/
+         - classes/  #Doma関連クラスのビルド結果の出力ディレクトリ
+ - src/
+    - main/
+       - scala/      #Dao利用クラスのソース
+ - target/
+    - scala-2.12/
+       - classes/    #Dao利用クラスのビルド結果の出力ディレクトリ
+ - build.sbt
+```
+
+
+
+Step2 build.sbt
+
+```scala
+lazy val root = (project in file(".")).settings(
+  inThisBuild(List(
+    scalaVersion := "2.12.4",
+    version      := "0.1.0-SNAPSHOT"
+  )),
+  name := "scala-doma-sample2",
+  libraryDependencies += scalaTest % Test,
+  // for Doma annotation processor
+  (unmanagedSourceDirectories in Compile) += generateSourceDirectory
+) dependsOn repository aggregate repository
+
+lazy val repository = project.settings(
+  inThisBuild(List(
+    scalaVersion := "2.12.4",
+    version      := "0.1.0-SNAPSHOT"
+  )),
+  name := "scala-doma-sample2-repository",
+  libraryDependencies += scalaTest % Test,
+  libraryDependencies ++= Seq(
+    "org.seasar.doma" % "doma" % "2.19.0",
+    "com.h2database" % "h2" % "1.4.193"
+  ),
+  // for Doma annotation processor
+  processAnnotationsSettings
+)
+
+lazy val processAnnotations = taskKey[Unit]("Process annotations")
+lazy val generateSourceDirectory = file(".").getAbsoluteFile / "generated"
+
+lazy val processAnnotationsSettings: Seq[Def.Setting[_]] = Seq(
+  processAnnotations in Compile := {
+    val classes = (unmanagedSources in Compile).value.filter(_.getPath.endsWith("scala"))
+    val log = streams.value.log
+    val separator = System.getProperties.getProperty("path.separator")
+    val classpath = ((dependencyClasspath in Compile).value.files mkString separator) + separator + (classDirectory in Compile).value.toString
+    if (classes.nonEmpty) {
+      log.info("Processing annotations ...")
+      deleteFiles(generateSourceDirectory)
+      val cutSize = (scalaSource in Compile).value.getPath.length + 1
+      val classesToProcess = classes.map(_.getPath.substring(cutSize).replaceFirst("\\.scala", "").replaceAll("[\\\\/]", ".")).mkString(" ")
+      val directory = (classDirectory in Compile).value
+      val command = s"javac -cp $classpath -proc:only -XprintRounds -d $directory -s $generateSourceDirectory $classesToProcess"
+      executeCommand(command, "Failed to process annotations.", log)
+      log.info("Done processing annotations.")
+    }
+  },
+  processAnnotations in Compile := ((processAnnotations in Compile) dependsOn (compile in Compile)).value,
+  copyResources in Compile := Def.taskDyn {
+    val copy = (copyResources in Compile).value
+    Def.task {
+      (processAnnotations in Compile).value
+      copy
+    }
+  }.value
+)
+
+def deleteFiles(targetDirectory: File): Unit = {
+  def delete(f: File): Unit =
+    if (f.isFile)
+      f.delete()
+    else
+      f.listFiles.toList.foreach(delete)
+  if(targetDirectory.exists)
+    delete(targetDirectory)
+  else
+    targetDirectory.mkdir()
+}
+
+def executeCommand(command: String, errorMessage: => String, log: Logger): Unit = {
+  val process = java.lang.Runtime.getRuntime.exec(command)
+  printInputStream(process.getErrorStream, log)
+  if (process.waitFor() != 0) {
+    log.error(errorMessage)
+    sys.error("Failed running command: " + command)
+  }
+}
+
+def printInputStream(is: scala.tools.nsc.interpreter.InputStream, log: Logger): Unit = {
+  val br = new java.io.BufferedReader(new java.io.InputStreamReader(is))
+  try {
+    var line = br.readLine
+    while (line != null) {
+      log.info(line)
+      line = br.readLine
+    }
+  } finally {
+    br.close()
+  }
+}
+```
+
+
+
+```sh
+> compile
+[info] Compiling 4 Scala sources to C:\scala-doma-sample2\repository\target\scala-2.12\classes ...
+[info] Done updating.
+[info] Done compiling.
+[info] Processing annotations ...
+[info] 往復1:
+[info]  入力ファイル: {sample.AppConfig, sample.Emp, sample.EmpDao, sample.ID}
+[info]  注釈: [scala.reflect.ScalaSignature, org.seasar.doma.Entity, org.seasar.doma.Id, org.seasar.doma.GeneratedValue, org.seasar.doma.SequenceGenerator, org.seasar.doma.Version, org.seasar.doma.Dao, org.seasar.doma.Script, org.seasar.doma.Select, org.seasar.doma.Insert, org.seasar.doma.Update, org.seasar.doma.Domain]
+[info]  最後の往復: false
+[info] 往復2:
+[info]  入力ファイル: {sample._ID, sample._Emp, sample.EmpDaoImpl}
+[info]  注釈: [javax.annotation.Generated, java.lang.SuppressWarnings, java.lang.Override]
+[info]  最後の往復: false
+[info] 往復3:
+[info]  入力ファイル: {}
+[info]  注釈: []
+[info]  最後の往復: true
+[info] Done processing annotations.
+[info] Compiling 1 Scala source and 3 Java sources to C:\scala-doma-sample2\target\scala-2.12\classes ...
+[info] Done compiling.
+[success] Total time: 7 s, completed 2017/12/06 18:17:45
+```
+OK
+
+
+
+```sh
+>run
+...
+情報: [DOMA2221] EXIT   : クラス=[sample.EmpDaoImpl], メソッド=[selectAll]
+Emp(ID(1),scott,10,1)
+Emp(ID(2),allen,21,2)
+12 06, 2017 6:22:19 午後 org.seasar.doma.jdbc.tx.LocalTransaction commit
+情報: [DOMA2067] ローカルトランザクション[1673739243]をコミットしました。
+12 06, 2017 6:22:19 午後 org.seasar.doma.jdbc.tx.LocalTransaction commit
+情報: [DOMA2064] ローカルトランザクション[1673739243]を終了しました。
+[success] Total time: 5 s, completed 2017/12/06 18:22:20
+```
+OK
+
+
+
+Step1の課題
+ - ~~アプリを作るのに2言語必要（Java, Scala）~~ <span style="color:green;font-size:150%">✔</span>
+ - 特にコレクションが混ざるのがつらい … 変わってない
+
+Step2の課題
+ - @field, @BeanPropertyは見にくくなるため使いたくない
+ - Doma2のIntelliJ IDEA用プラグインが使えない(SQLファイルに飛べない)
+
+
+
+
+Step3
+-----
+Domala
+
+
+
+Domala
+-----
+
+いままでの課題をクリアすべく、ScalaによるDoma2のWrapperを作りました。
+
+Domalaといいます。
+
+まだベータ版ですが年度内には1.0リリースできるように目指してます。
+
+
+
+
+Domala project構成
+
+```
+project-root/
+ - src/
+    - main/
+       - scala/     #Doma関連クラスのソース, Dao利用クラスのソース
+ - target/
+    - scala-2.12/
+       - classes/   #ビルド結果の出力ディレクトリ
+ - build.sbt
+```
+
+
+
+Domala build.sbt
+```scala
+lazy val root = (project in file(".")).settings(
+  inThisBuild(List(
+    scalaVersion := "2.12.4",
+    version      := "0.1.0-SNAPSHOT"
+  )),
+  name := "scala-doma-sample3",
+  libraryDependencies += scalaTest % Test,
+  libraryDependencies ++= Seq(
+    "com.github.domala" %% "domala" % "0.1.0-beta.6",
+    "com.h2database" % "h2" % "1.4.193"
+  ),
+  // for Doma annotation processor
+  metaMacroSettings,
+)
+
+lazy val metaMacroSettings: Seq[Def.Setting[_]] = Seq(
+  addCompilerPlugin("org.scalameta" % "paradise" % "3.0.0-M10" cross CrossVersion.full),
+  scalacOptions += "-Xplugin-require:macroparadise",
+  scalacOptions in (Compile, console) ~= (_ filterNot (_ contains "paradise")) // macroparadise plugin doesn't work in repl yet.
+)
+```
+
+
+
+scalameta paradise ?
+-----
+
+Scalaの準標準ライブラリ(だったもの)
+
+scalacがバイトコードを作る前にASTをいじれる代物
+
+次はscalamacrosとして生まれ変わるかもしれない
+
+http://scala-lang.org/blog/2017/10/09/scalamacros.html
+
+
+
+Domala Entity (Scala)
+
+```scala
+@Entity
+case class Emp(
+  @Id
+  @GeneratedValue(strategy = GenerationType.SEQUENCE)
+  @SequenceGenerator(sequence = "emp_id_seq")
+  id: ID[Emp],
+  name: String,
+  age: Int,
+  @Version
+  version: Int) {
+  def growOld: Emp = this.copy(age = this.age + 1)
+}
+```
+
+
+
+Domala Holder (Scala)
+
+Doma3から`Domain`は`Holder`に名前が変わるためDomalaも倣いました
+
+```scala
+case class ID[ENTITY](value: Long) extends AnyVal
+```
+
+
+
+Domala Dao (Scala)
+
+```scala
+@Dao
+trait EmpDao {
+
+  @Select("select * from emp where id = /* id */0")
+  def selectById(id: ID[Emp]): Option[Emp] // scala.Optionが使える
+
+  @Select("select * from emp")
+  def selectAll: Seq[Emp] // scala.Seqが使える
+
+  @Insert
+  def insert(emp: Emp): Result[Emp]
+
+  @Update
+  def update(emp: Emp): Result[Emp]
+
+  @Script("""
+  create table emp(
+    id int not null primary key,
+    name varchar(20),
+    age int,
+    version int not null
+  );
+  create sequence emp_id_seq start with 1;
+  """)
+  def create(): Unit
+
+}
+```
+
+
+
+Scalaはヒアテキストが利用できるため、DomalaではSQLファイルは使わずアノテーションパラメータのリテラル文字列でSQLを記述します。
+
+
+
+
+Domala Daoの利用 (Scala)
+
+```scala
+object SampleApp3 extends App {
+  private implicit lazy val config: Config = AppConfig
+  private lazy val dao: EmpDao = EmpDao.impl
+
+  Required {
+    dao.create() // create table
+    val inserted = Seq(
+      Emp(ID(-1), "scott", 10, -1),
+      Emp(ID(-1), "allen", 20, -1)
+    ).map {
+      dao.insert
+    }
+    println(inserted)
+    // idが2のEmpのageを +1
+    val updated = // Optionなので型推論が働く
+      dao
+        .selectById(ID(2))
+        .map { emp =>
+          dao.update(emp.growOld)
+        }
+    println(updated)
+    val list = dao.selectAll
+    list.foreach(println)
+    // =>
+    //   Emp(ID(1),scott,10,1)
+    //   Emp(ID(2),allen,21,2)
+  }
+
+}
+```
+
+
+
+
+Domalaの特徴
+
+IntelliJ IDEA使えます
+
+![idea-error](./idea-error.png)
+
+
+
+
+アノテーション横のなぞのボタン
+![idea-expand1](./idea-expand1.png)
+
+
+
+押すとマクロの結果が見れます
+
+そのままデバッグもできます
+
+![idea-expand2](./idea-expand2.png)
+
+
+
+Step1の課題
+ - ~~アプリを作るのに2言語必要（Java, Scala）~~ <span style="color:green;font-size:150%">✔</span>
+ - ~~特にコレクションが混ざるのがつらい~~ <span style="color:green;font-size:150%">✔</span>
+
+Step2の課題
+ - ~~@field, @BeanPropertyは見にくくなるため使いたくない~~ <span style="color:green;font-size:150%">✔</span>
+ - ~~Doma2のIntelliJ IDEA用プラグインが使えない(SQLファイルに飛べない)~~ <span style="color:green;font-size:150%">✔</span>
 
 ✔
