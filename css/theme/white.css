@@ -146,7 +146,7 @@ body {
   text-align: left;
   font-size: 0.55em;
   font-family: Consolas;
-  line-height: 1.2em;
+  line-height: 1.1em;
   word-wrap: break-word;
   box-shadow: 0px 0px 6px rgba(0, 0, 0, 0.3); }
 
@@ -160,7 +160,7 @@ body {
   display: block;
   padding: 5px;
   overflow: auto;
-  max-height: 550px;
+  max-height: 510px;
   word-wrap: normal; }
 
 .reveal table {

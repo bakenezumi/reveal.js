@@ -51,7 +51,7 @@ Darcula color scheme from the JetBrains family of IDEs
 }
 
 .hljs-string {
-  color: #6a8759;
+  color: #8aa779;
 }
 
 .hljs-subst,
@@ -63,10 +63,14 @@ Darcula color scheme from the JetBrains family of IDEs
 .hljs-selector-attr,
 .hljs-selector-pseudo,
 .hljs-template-tag,
-.hljs-template-variable,
-.hljs-addition {
+.hljs-template-variable {
   color: #e0c46c;
 }
+
+.hljs-addition {
+  color: #6aFF59;
+}
+
 
 .hljs-comment,
 .hljs-deletion {

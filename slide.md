@@ -1,12 +1,12 @@
 Doma on Scala
 ------
-Doma勉 2017
+Doma勉強会 2017
 
 
 
 自己紹介
 ------
-- スクィーラ
+- 細西 伸彦 [@bake_nezummi](https://twitter.com/bake_nezumi)
 - 福岡のSier勤務
 - 受託業務アプリ開発 / パッケージ開発
 - 主にJava, 最近は若干Scala
@@ -24,7 +24,11 @@ Doma勉 2017
 
 
 
-Scala＋Domaの話をする前に、
+むしろDomaが使いたかった
+
+
+
+Doma＋Scalaの話をする前に、
 Pluggable Annotation Processing APIについて少し話します
 
 
@@ -49,7 +53,7 @@ Pluggable Annotation Processing API
   - 実行時にエラーが先送りされない<!-- .element: class="fragment" style="font-size:90%" -->
 
 - 自動生成
-  - 事前にリフレクションを済ませられるため実行時リフレクションがいらない<!-- .element: class="fragment" style="font-size:90%" -->
+  - 事前にリフレクションを済ませておけるため実行時リフレクションがいらない<!-- .element: class="fragment" style="font-size:90%" -->
   - ボイラープレートが減る<!-- .element: class="fragment" style="font-size:90%" -->
 
 
@@ -96,13 +100,31 @@ public final class _Emp
 Doma2のAnnotation Processingの流れ
 -----
 
-![javac](./doma-javac.png)
+![javac](./doma-javac1.png)
 
 <span style="font-size:60%">http://openjdk.java.net/groups/compiler/doc/compilation-overview/index.html </span>
 
 
 
-Pluggable Annotation Processing APIを踏まえた上でScalaでDomaを動かします
+Doma2のAnnotation Processingの流れ
+-----
+
+![javac](./doma-javac2.png)
+
+<span style="font-size:60%">http://openjdk.java.net/groups/compiler/doc/compilation-overview/index.html </span>
+
+
+
+Doma2のAnnotation Processingの流れ
+-----
+
+![javac](./doma-javac3.png)
+
+<span style="font-size:60%">http://openjdk.java.net/groups/compiler/doc/compilation-overview/index.html </span>
+
+
+
+Pluggable Annotation Processing APIを踏まえた上でScalaでDomaを使ってみます
 
 
 
@@ -175,10 +197,13 @@ project-root/
        - classes/   #ビルド結果の出力ディレクトリ
  - build.sbt
 ```
+\* 上記はsbt標準のプロジェクト構成<!-- .element: style="font-size:60%; text-align:left; margin-left: 30px" -->
+
+\* sbtはscalaのビルドツール<!-- .element: style="font-size:60%; text-align:left; margin-left: 30px" -->
 
 
 
-Step1 build.sbt（初版 要修正）
+Step1 build.sbt<span style="font-size:60%">*1</span>（初版 要修正）
 ```scala
 lazy val root = (project in file(".")).
   settings(
@@ -194,7 +219,9 @@ lazy val root = (project in file(".")).
     )
   )
 ```
-
+<div style="text-align:left; margin-left: 30px">
+<span style="font-size:50%">*1</span><span style="font-size:60%">build.sbtはsbtの設定ファイル</span>
+</div >
 
 
 Step1 Entity (Java)
@@ -304,6 +331,31 @@ public interface EmpDao {
 
 
 
+Step1 SQL
+
+selectById.sql<!-- .element: style="font-size:70%; text-align:left; margin-left: 30px" -->
+
+```sql
+select * from emp where id = /* id */0
+```
+selectAll.sql<!-- .element: style="font-size:70%; text-align:left; margin-left: 30px" -->
+
+```sql
+select * from emp
+```
+create.script<!-- .element: style="font-size:70%; text-align:left; margin-left: 30px" -->
+
+```sql
+create table emp(
+    id int not null primary key,
+    name varchar(20),
+    age int,
+    version int not null
+);
+create sequence emp_id_seq start with 1;
+```
+
+
 
 Step1 Daoの利用 (Scala)
 
@@ -323,7 +375,7 @@ object SampleApp1 extends App {
     val updated =
       dao
         .selectById(ID.of(2))
-        .map[Emp](_.grawOld) // Optional#mapは型推論が効かないため明示
+        .map[Emp](_.grawOld) // Optional#mapは型推論が効かないため明示する必要がある
         .map[Result[Emp]](dao.update)
     println(updated)
 
@@ -334,6 +386,7 @@ object SampleApp1 extends App {
   }: Runnable)
 }
 ```
+\* _.grawOld は(x) => x.grawOld の省略記法<!-- .element: style="font-size:60%; text-align:left; margin-left: 30px" -->
 
 
 
@@ -380,13 +433,13 @@ compile in Compile := ((compile in Compile) dependsOn (copyResources in Compile)
 
 
 
+Step1 compile & run
 ```bash
 sbt:scala-doma-sample1> compile
 [info] Compiling 1 Scala source and 4 Java sources to C:\scala-doma-sample1\target\scala-2.12\classes ...
 [info] Done compiling.
 [success] Total time: 5 s, completed 2017/12/06 9:54:14
 ```
-OK
 ```bash
 sbt:scala-doma-sample1> run
 ...
@@ -449,7 +502,7 @@ Step2 Entity (Scala)
 // コンストラクタパラメータに対してアノテーションを付けると
 // パラメータに対してのみ有効になる
 // 下記のように@fieldと明示することで自動的に作られる同名の
-// 状態フィールドに対し アノテーションを有効にできる。
+// 状態フィールドに対し アノテーションを有効にできる
 // http://www.scala-lang.org/api/current/scala/annotation/meta/index.html
 @Entity(immutable = true)
 case class Emp(
@@ -498,10 +551,10 @@ Step2 Dao (Scala)
 @Dao
 trait EmpDao {
   @Select
-  def selectById(id: ID[Emp]): Optional[Emp]
+  def selectById(id: ID[Emp]): Optional[Emp] // javaのOptional
 
   @Select
-  def selectAll: java.util.List[Emp]
+  def selectAll: java.util.List[Emp] // javaのList
 
   @Insert
   def insert(emp: Emp): Result[Emp]
@@ -558,7 +611,7 @@ object SampleApp2 extends App {
     val updated =
       dao
         .selectById(ID(2))
-        .map[Emp](_.grawOld) // Optional#mapは型推論が効かないため明示
+        .map[Emp](_.grawOld) // Optional#mapは型推論が効かないため明示する必要がある
         .map[Result[Emp]](dao.update)
     println(updated)
 
@@ -589,12 +642,12 @@ javacがそもそも走らない
 
 
 
-Doma2のAnnotation Processingの流れ（再掲）
-![javac](./doma-javac.png)
+（再掲）Doma2のAnnotation Processingの流れ
+![javac](./doma-javac3.png)
 
-<span style="font-size:60%">http://openjdk.java.net/groups/compiler/doc/compilation-overview/index.html </span>
+EmpDao.javaがいないので
 
- 
+EmpDaoImpl.javaが作られない
 
 
 
@@ -738,6 +791,7 @@ def printInputStream(is: scala.tools.nsc.interpreter.InputStream, log: Logger): 
 
 
 
+Step2 compile
 ```bash
 sbt:scala-doma-sample2> compile
 [info] Compiling 4 Scala sources to C:\scala-doma-sample2\repository\target\scala-2.12\classes ...
@@ -763,6 +817,7 @@ OK
 
 
 
+Step2 run
 ```sh
 sbt:scala-doma-sample2> run
 ...
@@ -825,37 +880,37 @@ Domalaの依存ライブラリ
 
 scalameta 
 -----
-- Scalaの準標準の実験的マクロライブラリ<!-- .element class="fragment" -->
+- Scalaの準標準の実験的マクロライブラリ
 
-- ASTの構築ができる<!-- .element class="fragment" -->
+- ASTの構築ができる
 
-- scalameta paradiseと組み合わせてアノテーションマクロが組める<!-- .element class="fragment" -->
+- scalameta paradiseと組み合わせてアノテーションマクロが組める
 
 
 
 scalameta paradise
 -----
-- アノテーションマクロを実現するScalaのコンパイラプラグイン<!-- .element class="fragment" data-fragment-index="1" style="font-size:90%"-->
+- アノテーションマクロを実現するScalaのコンパイラプラグイン<!-- style=".element font-size:90%"-->
 
-- JavaのPluggable Annotation Processing APIに近く、ASTの検証、及び改変ができる<!-- .element class="fragment" data-fragment-index="2" style="font-size:90%"-->
+- JavaのPluggable Annotation Processing APIに近く、ASTの検証、及び改変ができる<!-- .element style="font-size:90%"-->
 
-- 次はscalamacrosとして生まれ変わるかもしれない<!-- .element class="fragment" data-fragment-index="3" style="font-size:90%"-->
+- 次はscalamacrosとして生まれ変わるかもしれない<!-- .element style="font-size:90%"-->
 
-http://scala-lang.org/blog/2017/10/09/scalamacros.html<!-- .element class="fragment" data-fragment-index="3" style="font-size:90%"-->
+http://scala-lang.org/blog/2017/10/09/scalamacros.html<!-- .element style="font-size:90%"-->
 
 
 
 scala-reflect
 -----
-- こちらもScalaの準標準の実験的マクロライブラリ<!-- .element class="fragment" style="font-size:80%"-->
+- こちらもScalaの準標準の実験的マクロライブラリ<!-- .element style="font-size:80%"-->
 
-- 歴史的に言うとscala-reflectがマクロv1, scalametaがマクロv2<!-- .element class="fragment" style="font-size:80%"-->
+- 歴史的に言うとscala-reflectがマクロv1, scalametaがマクロv2<!-- .element style="font-size:80%"-->
 
-- scalameta paradiseのアノテーションマクロはアノテーションがつけられた対象のASTの情報のみしか現状取得できない。（型の詳細情報が取得できない）<!-- .element class="fragment" style="font-size:80%"-->
+- scalameta paradiseのアノテーションマクロはアノテーションがつけられた対象のASTの情報のみしか現状取得できない。（型の詳細情報が取得できない）<!-- .element style="font-size:80%"-->
 
-- このscala-reflectはコンパイル時のクラスローダーミラーが参照できるため大体なんでもできる（型の判定、定義メソッドの取得、ASTの構築、など）<!-- .element class="fragment" style="font-size:80%"-->
+- このscala-reflectはコンパイル時のクラスローダーミラーが参照できるため大体なんでもできる（型の判定、定義メソッドの取得、ASTの構築、など）<!-- .element style="font-size:80%"-->
 
-- ただし難解<!-- .element class="fragment" style="font-size:80%"-->
+- ただし難解<!-- .element style="font-size:80%"-->
 
 
 
@@ -882,13 +937,14 @@ Domalaのアノテーション
 
 その他のorg.seasar.domaパッケージ内のアノテーションはdomala.XXとして同様に利用できます
 
-(0.1.0-beta.6ではストアド系は未実装）
+(0.1.0-beta.7ではストアド系は未実装）
 
 <span style="font-size:50%">*1</span><span style="font-size:70%">Doma3からDomainはHolderに名前が変わるためDomalaも倣いました</span>
 
 
 
-Domalaの実装例
+Domalaの利用例
+-----
 
 
 
@@ -993,7 +1049,7 @@ trait EmpDao {
 
 
 
-Scalaはヒアドキュメント記述ができるため、DomalaではSQLファイルは使わずアノテーションパラメータのリテラル文字列でSQLを記述します。
+Scalaはヒアドキュメント記述ができるため、DomalaではSQLファイルは使わずアノテーションパラメータのリテラル文字列でSQLを記述します<!-- .element style="font-size:80%"-->
 ```scala
   @Select("""
   select
@@ -1048,6 +1104,73 @@ object SampleApp3 extends App {
 
 
 
+implicit parameterについて
+
+```
+private implicit lazy val config: Config = AppConfig
+```
+
+Scalaではこのようにimplicitと宣言されたオブジェクトは、スコープ内のimplicit parameterを持つ関数に自動的に渡されます<!-- .element style="font-size:80%"-->
+
+Domalaでは、<!-- .element style="text-align:left;font-size:80%"-->
+
+- XXDao.impl(Daoのファクトリメソッド)<!-- .element style="font-size:80%"-->
+- Required   (Config#getTransactionManager#requiredの糖衣構文)<!-- .element style="font-size:80%"-->
+
+などでConfigトレイトの実装オブジェクトをimplicit parameterとして受け取るようにしています<!-- .element style="font-size:80%"-->
+
+
+
+Javaとのdiff
+```diff
+- private static final EmpDao dao = new EmpDaoImpl();
++ private implicit lazy val config: Config = AppConfig
++ private lazy val dao: EmpDao = EmpDao.impl
+- AppConfig.singleton().getTransactionManager().required(() -> {
++   Required {
+-   dao.create();
++   dao.create()
+-   final List<Result<Emp>> inserted = Stream.of(
++   val inserted = Seq(
+-     new Emp(ID.of(-1), "scott", 10, -1),
++     Emp(ID(-1), "scott", 10, -1),
+-     new Emp(ID.of(-1), "allen", 20, -1)
++     Emp(ID(-1), "allen", 20, -1)
+-   ).map(dao::insert)
+-     .collect(Collectors.toList());
++   ).map(dao.insert)
+-   System.out.println(inserted);
++   println(inserted)
+```
+
+
+
+Javaとのdiff
+```diff
+-   final Optional<Result<Emp>> updated =
++   val updated =
+      dao
+-       .selectById(ID.of(2))
++       .selectById(ID(2))
+-       .map(Emp::grawOld)
++       .map(_.growOld)
+-       .map(dao::update);
++       .map(dao.update)
+-   System.out.println(updated);
++   println(updated)
+-   dao.selectAll().forEach(System.out::println);
++   dao.selectAll.foreach(println)
+  }
+```
+そんなに変わってない。。気もしますが逆に<!-- .element style="font-size:80%"-->
+
+Javaユーザーは違和感なくScala & Domalaを使えるのではと<!-- .element style="font-size:80%"-->
+
+考えてます！<!-- .element style="font-size:80%"-->
+
+
+
+Domala compile & run
 ```bash
 sbt:scala-doma-sample3> compile
 [info] Updating {file:/C:/Users/19990013/Documents/@E_Scala/scala-doma-sample3/}root...
@@ -1087,7 +1210,9 @@ Step2の課題
 
 
 
-やっと全てScalaでDomaが使える環境ができました！
+やっと全てScalaでDomaを使える環境が
+
+できました！
 
 
 
@@ -1149,9 +1274,74 @@ toStreamでStreamに変換もできるのでこちらだけでもいいかもし
 
 
 
+DomalaでEnum
+-----
+
+ScalaにはEnumerationという列挙型がありますが、いろいろといけてないのでDomalaでは対応していません。代わりにsealed<span style="font-size:60%">*1</span> abstract classに@Holderを注釈して表現できます
+
+```scala
+@Holder
+sealed abstract class Sex(value: String)
+object Sex {
+  object Male extends Sex("M")
+  object Female extends Sex("F")
+  object Other extends Sex("O")
+}
+```
+<span style="font-size:50%">*1</span> <span style="font-size:60%">sealed: 同一ファイル内でしかサブクラスを定義できなくする修飾子</span>
 
 
 
+DomalaのもうひとつのHolder
+-----
+Scalaではvalue classという実行時に参照割り当てが行われない特殊なクラスを定義できます
+
+value classは任意のクラスをAnyValのサブクラスにすることで定義できます
+
+Domalaではこのvalue classをHolderの代わりにEnitityのフィールドとして持つことができます
+
+```scala
+// Annotation is not necessary
+case class ID[ENTITY](value: Long) extends AnyVal 
+```
+
+http://docs.scala-lang.org/overviews/core/value-classes.html<!-- .element: style="font-size:70%" -->
 
 
-✔
+
+DomalaでREPL
+-----
+scalameta paradiseはREPLで利用できないため、簡易Daoとしてstring interpolationを用意しています
+
+```sh
+sbt> console
+scala> import domala._
+scala> implicit val config: domala.jdbc.Config = AppConfig
+scala> Required(select"select * from emp".getMapList)
+res0: List[Map[String,AnyRef]] = List(Map(ID -> 1, NAME -> scott, AGE -> 10, VERSION -> 1), Map(ID -> 2, NAME -> allen, AGE -> 20, VERSION -> 1))
+
+scala> def selectByIds[R](id: Seq[Int])(f: Iterator[Emp] => R) =
+     | Required(select"select * from emp where id in ($id)".apply(f))
+
+scala> selectByIds(Seq(2))(_.toStream.headOption)
+res1: Option[sample.Emp] = Some(Emp(ID(2),allen,20,1))
+
+scala> selectByIds(1 to 10)(_.map(_.age).sum)
+res2: Int = 30
+```
+
+
+
+Demo
+-----
+
+
+
+Q&A
+-----
+
+
+
+Domalaよかったら使ってみてください
+
+https://github.com/bakenezumi/domala
