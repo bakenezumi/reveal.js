@@ -24,107 +24,9 @@ Doma勉強会 2017
 
 
 
-むしろDomaが使いたかった
+今日は3つのパターンのDoma + Scalaの
 
-
-
-Doma＋Scalaの話をする前に、
-Pluggable Annotation Processing APIについて少し話します
-
-
-
-Pluggable Annotation Processing API
------
-
-- Java標準のアノテーションマクロ<!-- .element: class="fragment" data-fragment-index="1"-->
-
-- コンパイル時に<!-- .element: class="fragment" data-fragment-index="2"-->
-  - アノテーションが付与されたコードの検証<!-- .element: class="fragment" data-fragment-index="2"-->
-  - Javaソースコードの自動生成<!-- .element: class="fragment" data-fragment-index="2"-->
-
-  が行える<!-- .element: class="fragment" data-fragment-index="2"-->
-
-
-
-もたらされるもの
------
-- コンパイル時にコード検証
-  - エラーメッセージによるコーディングのガイド<!-- .element: class="fragment" style="font-size:90%" -->
-  - 実行時にエラーが先送りされない<!-- .element: class="fragment" style="font-size:90%" -->
-
-- 自動生成
-  - 事前にリフレクションを済ませておけるため実行時リフレクションがいらない<!-- .element: class="fragment" style="font-size:90%" -->
-  - ボイラープレートが減る<!-- .element: class="fragment" style="font-size:90%" -->
-
-
-
-Doma2のAnnotation Processing
------
-EmpDao.java
-```java
-@Dao public interface EmpDao {
-    @Select List<Emp> findAll();
-}
-```
-
-↓
-
-EmpDaoImpl.java
-```java
-public class EmpDaoImpl
-  extends org.seasar.doma.internal.jdbc.dao.AbstractDao
-  implements EmpDao { .../* Dao実装 */ }
-```
-
-
-
-Doma2のAnnotation Processing
------
-Emp.java
-```java
-@Entity public classs EmpDao {
-    @Id int id;
-}
-```
-↓
-
-_Emp.java
-```java
-public final class _Emp
-  extends org.seasar.doma.jdbc.entity.AbstractEntityType<Emp> {
-    .../* Entityのヘルパー実装 */ }
-```
-
-
-
-Doma2のAnnotation Processingの流れ
------
-
-![javac](./doma-javac1.png)
-
-<span style="font-size:60%">http://openjdk.java.net/groups/compiler/doc/compilation-overview/index.html </span>
-
-
-
-Doma2のAnnotation Processingの流れ
------
-
-![javac](./doma-javac2.png)
-
-<span style="font-size:60%">http://openjdk.java.net/groups/compiler/doc/compilation-overview/index.html </span>
-
-
-
-Doma2のAnnotation Processingの流れ
------
-
-![javac](./doma-javac3.png)
-
-<span style="font-size:60%">http://openjdk.java.net/groups/compiler/doc/compilation-overview/index.html </span>
-
-
-
-Pluggable Annotation Processing APIを踏まえた上でScalaでDomaを使ってみます
+組み合わせ方を段階的に説明します
 
 
 
@@ -139,6 +41,7 @@ Doma関連クラスもScalaで作る<!-- .element: class="fragment" -->
 Step3
 -----
 Domala<!-- .element: class="fragment" -->
+
 
 
 
@@ -176,55 +79,43 @@ public class SampleApp0 {
 
 
 
-Step1
------ 
-Doma関連クラスはJavaで作り、利用をScalaで
+Domain  (Java)
 
+```java
+@Domain(valueType = long.class, factoryMethod = "of")
+public final class ID<ENTITY> implements Serializable {
+  private final long value;
 
+  private ID(final long value) {
+    this.value = value;
+  }
 
+  public long getValue() {
+    return value;
+  }
 
-Step1 project構成
+  public static <ENTITY> ID<ENTITY> of(final long value) {
+    return new ID<>(value);
+  }
 
+  @Override
+  public boolean equals(Object obj) {
+    return obj instanceof ID && ((ID) obj).value == value;
+  }
+
+  @Override
+  public String toString() {
+    return (String.format("ID(%d)", value));
+  }
+
+  private static final long serialVersionUID = 1L;
+
+}
 ```
-project-root/
- - src/
-    - main/
-       - java/      #Doma関連クラスのソース
-       - scala/     #Dao利用クラスのソース
-       - resources/ #SQLファイル
- - target/
-    - scala-2.12/
-       - classes/   #ビルド結果の出力ディレクトリ
- - build.sbt
-```
-\* 上記はsbt標準のプロジェクト構成<!-- .element: style="font-size:60%; text-align:left; margin-left: 30px" -->
-
-\* sbtはscalaのビルドツール<!-- .element: style="font-size:60%; text-align:left; margin-left: 30px" -->
 
 
 
-Step1 build.sbt<span style="font-size:60%">*1</span>（初版 要修正）
-```scala
-lazy val root = (project in file(".")).
-  settings(
-    inThisBuild(List(
-      scalaVersion := "2.12.4",
-      version      := "0.1.0-SNAPSHOT"
-    )),
-    name := "scala-doma-sample1",
-    libraryDependencies ++= Seq(
-      "org.seasar.doma" % "doma" % "2.19.0",
-      "com.h2database" % "h2" % "1.4.193",
-      scalaTest % Test
-    )
-  )
-```
-<div style="text-align:left; margin-left: 30px">
-<span style="font-size:50%">*1</span><span style="font-size:60%">build.sbtはsbtの設定ファイル</span>
-</div >
-
-
-Step1 Entity (Java)
+Entity (Java)
 
 ```java
 @Entity(immutable = true)
@@ -270,43 +161,7 @@ public class Emp implements Serializable {
 
 
 
-Step1 Domain  (Java)
-
-```java
-@Domain(valueType = long.class, factoryMethod = "of")
-public final class ID<ENTITY> implements Serializable {
-  private final long value;
-
-  private ID(final long value) {
-    this.value = value;
-  }
-
-  public long getValue() {
-    return value;
-  }
-
-  public static <ENTITY> ID<ENTITY> of(final long value) {
-    return new ID<>(value);
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    return obj instanceof ID && ((ID) obj).value == value;
-  }
-
-  @Override
-  public String toString() {
-    return (String.format("ID(%d)", value));
-  }
-
-  private static final long serialVersionUID = 1L;
-
-}
-```
-
-
-
-Step1 Dao (Java)
+Dao (Java)
 
 ```java
 @Dao(config = AppConfig.class)
@@ -331,7 +186,7 @@ public interface EmpDao {
 
 
 
-Step1 SQL
+SQL
 
 selectById.sql<!-- .element: style="font-size:70%; text-align:left; margin-left: 30px" -->
 
@@ -348,12 +203,66 @@ create.script<!-- .element: style="font-size:70%; text-align:left; margin-left: 
 ```sql
 create table emp(
     id int not null primary key,
-    name varchar(20),
-    age int,
+    name varchar(20) not null,
+    age int not null,
     version int not null
 );
 create sequence emp_id_seq start with 1;
 ```
+
+
+
+Step1
+----- 
+Doma関連クラスはJavaで作り、利用をScalaで
+
+
+
+Step1 project構成
+
+```
+project-root/
+ - src/
+    - main/
+       - java/      #Doma関連クラスのソース
+       - scala/     #Dao利用クラスのソース
+       - resources/ #SQLファイル
+ - target/
+    - scala-2.12/
+       - classes/   #ビルド結果の出力ディレクトリ
+ - build.sbt
+```
+\* 上記はsbt標準のプロジェクト構成<!-- .element: style="font-size:60%; text-align:left; margin-left: 30px" -->
+
+\* sbtはscalaのビルドツール<!-- .element: style="font-size:60%; text-align:left; margin-left: 30px" -->
+
+
+
+Step1 build.sbt<span style="font-size:60%">*1</span>（初版 要修正）
+```scala
+lazy val root = (project in file(".")).
+  settings(
+    inThisBuild(List(
+      scalaVersion := "2.12.4",
+      version      := "0.1.0-SNAPSHOT"
+    )),
+    name := "scala-doma-sample1",
+    libraryDependencies ++= Seq(
+      "org.seasar.doma" % "doma" % "2.19.0",
+      "com.h2database" % "h2" % "1.4.193",
+      scalaTest % Test
+    )
+  )
+```
+<div style="text-align:left; margin-left: 30px">
+<span style="font-size:50%">*1</span><span style="font-size:60%">build.sbtはsbtの設定ファイル</span>
+</div >
+
+
+
+Domain, Enity, Dao及びSQLはそのまま使います
+
+アプリをJavaからScalaにします
 
 
 
@@ -390,7 +299,9 @@ object SampleApp1 extends App {
 
 
 
-ビルドがそのままではうまくいかない
+Step1 compile & run
+
+そのままではコンパイルが失敗<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
 ```bash
 sbt:scala-doma-sample1> compile
@@ -402,16 +313,18 @@ sbt:scala-doma-sample1> compile
 [error] (compile:compileIncremental) Compilation failed
 ```
 
-Javaから先にコンパイルしないといけない
+Javaから先にコンパイルする指定がいる<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
-⇒ build.sbtに追記
+⇒ build.sbtに追記<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 ```scala
 compileOrder := CompileOrder.JavaThenScala
 ```
 
 
 
-指定して再コンパイル
+Step1 compile & run
+
+再コンパイル<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
 ```bash
 sbt:scala-doma-sample1> compile
@@ -423,9 +336,9 @@ sbt:scala-doma-sample1> compile
 [error]                 ^^
 ```
 
-コンパイルより前にsqlファイル（resources）を出力ディレクトリにコピーしないといけない
+コンパイルより前にsqlファイル（resources）を出力ディレクトリにコピーしないといけない<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
-⇒ build.sbtに追記
+⇒ build.sbtに追記<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
 ```scala
 compile in Compile := ((compile in Compile) dependsOn (copyResources in Compile)).value
@@ -534,11 +447,11 @@ case class ID[ENTITY](
 
 
 
-case class
------
-EntityとDomainですが、アノテーションが少し増えてしまいましたが実装はだいぶ減りました
+case classについて
 
-Scalaではcase classと定義するとhashCode()、equals()、toString()、等がコンパイル時に自動生成されるためこの恩恵を受けています
+EntityとDomainですが、アノテーションが少し増えてしまいましたが実装はだいぶ減りました<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
+
+Scalaではcase classと定義するとhashCode()、equals()、toString()、等がコンパイル時に自動生成されるためこの恩恵を受けています<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
 
 
@@ -627,7 +540,94 @@ object SampleApp2 extends App {
 
 
 
-ビルドがつらかった
+Step2 compile & run
+
+Pluggable Annotation Processing APIでひっかかります
+
+
+
+Pluggable Annotation Processing API
+
+- Java標準のアノテーションマクロ
+
+- コンパイル時に
+  - アノテーションが付与されたコードの検証
+  - ソースコードの自動生成
+
+  が行える
+
+
+
+Doma2のAnnotation Processing
+
+EmpDao.java<!-- .element style="text-align:left;font-size:80%; margin-left:30px"-->
+```java
+@Dao public interface EmpDao {
+    @Select List<Emp> findAll();
+}
+```
+
+↓<span style="font-size:80%">コード＆SQL検証</span>
+
+EmpDaoImpl.java<!-- .element style="text-align:left;font-size:80%; margin-left:30px"-->
+```java
+public class EmpDaoImpl
+  extends org.seasar.doma.internal.jdbc.dao.AbstractDao
+  implements EmpDao { .../* Dao実装 */ }
+```
+
+
+
+Doma2のAnnotation Processing
+
+Emp.java<!-- .element style="text-align:left;font-size:80%; margin-left:30px"-->
+```java
+@Entity public classs EmpDao {
+    @Id int id;
+}
+```
+↓<span style="font-size:80%">コード検証</span>
+
+_Emp.java<!-- .element style="text-align:left;font-size:80%; margin-left:30px"-->
+```java
+public final class _Emp
+  extends org.seasar.doma.jdbc.entity.AbstractEntityType<Emp> {
+    .../* Entityのヘルパー実装 */ }
+```
+
+
+
+Doma2のAnnotation Processingの流れ
+
+![javac](./doma-javac1.png)<!-- .element: width="912" height="331" style="overflow: hidden;
+    width: 912px;
+    height: 331px;
+    position: relative;" -->
+
+<span style="font-size:60%">http://openjdk.java.net/groups/compiler/doc/compilation-overview/index.html </span>
+
+
+
+Doma2のAnnotation Processingの流れ
+
+![javac](./doma-javac2.png)<!-- .element: width="912" height="331" style="overflow: hidden;
+    width: 912px;
+    height: 331px;
+    position: relative;" -->
+
+<span style="font-size:60%">http://openjdk.java.net/groups/compiler/doc/compilation-overview/index.html </span>
+
+
+
+Doma2のAnnotation Processingの流れ
+
+![javac](./doma-javac3.png)<!-- .element: width="912" height="331" style="overflow: hidden;
+    width: 912px;
+    height: 331px;
+    position: relative;" -->
+
+<span style="font-size:60%">http://openjdk.java.net/groups/compiler/doc/compilation-overview/index.html </span>
+
 
 
 
@@ -791,7 +791,7 @@ def printInputStream(is: scala.tools.nsc.interpreter.InputStream, log: Logger): 
 
 
 
-Step2 compile
+Step2 compile & run
 ```bash
 sbt:scala-doma-sample2> compile
 [info] Compiling 4 Scala sources to C:\scala-doma-sample2\repository\target\scala-2.12\classes ...
@@ -817,7 +817,7 @@ OK
 
 
 
-Step2 run
+Step2 compile & run
 ```sh
 sbt:scala-doma-sample2> run
 ...
@@ -863,8 +863,7 @@ Domala
 
 
 
-Domalaの依存ライブラリ
------
+**Domala**の依存ライブラリ
 
 |  |  |
 |:-----------|:------|
@@ -879,29 +878,29 @@ Domalaの依存ライブラリ
 
 
 scalameta 
------
-- Scalaの準標準の実験的マクロライブラリ
 
-- ASTの構築ができる
+- Scalaの準標準の実験的マクロライブラリ<!-- .element style="font-size:80%"-->
 
-- scalameta paradiseと組み合わせてアノテーションマクロが組める
+- ASTの構築ができる<!-- .element style="font-size:80%"-->
+
+- scalameta paradiseと組み合わせてアノテーションマクロが組める<!-- .element style="font-size:80%"-->
 
 
 
 scalameta paradise
------
-- アノテーションマクロを実現するScalaのコンパイラプラグイン<!-- style=".element font-size:90%"-->
 
-- JavaのPluggable Annotation Processing APIに近く、ASTの検証、及び改変ができる<!-- .element style="font-size:90%"-->
+- アノテーションマクロを実現するScalaのコンパイラプラグイン<!-- .element style="font-size:80%"-->
 
-- 次はscalamacrosとして生まれ変わるかもしれない<!-- .element style="font-size:90%"-->
+- JavaのPluggable Annotation Processing APIに近く、ASTの検証、及び改変ができる<!-- .element style="font-size:80%"-->
 
-http://scala-lang.org/blog/2017/10/09/scalamacros.html<!-- .element style="font-size:90%"-->
+- 次はscalamacrosとして生まれ変わるかもしれない<!-- .element style="font-size:80%"-->
+
+http://scala-lang.org/blog/2017/10/09/scalamacros.html<!-- .element style="font-size:80%"-->
 
 
 
 scala-reflect
------
+
 - こちらもScalaの準標準の実験的マクロライブラリ<!-- .element style="font-size:80%"-->
 
 - 歴史的に言うとscala-reflectがマクロv1, scalametaがマクロv2<!-- .element style="font-size:80%"-->
@@ -914,20 +913,19 @@ scala-reflect
 
 
 
-Domalaでのマクロの利用用途
------
+**Domala**でのマクロの利用用途
+
 - scalameta / scalameta paradise
-  - アノテーション対象の構文検証<!-- .element class="fragment" style="font-size:80%"-->
-  - Dao実装、Entityヘルパーなどの自動生成<!-- .element class="fragment" style="font-size:80%"-->
+  - アノテーション対象の構文検証
+  - Dao実装、Entityヘルパーなどの自動生成
 
 - scala-reflect
-  - scalametaでは判定できない型の検証<!-- .element class="fragment" style="font-size:80%"-->
-  - 例えばIN句に渡されるパラメータはIterableのサブタイプであり、かつその中身はSQLにマッピングできる型であるか、のような検証<!-- .element class="fragment" style="font-size:80%"-->
+  - scalametaでは判定できない型の検証
+  - 例えばIN句に渡されるパラメータはIterableのサブタイプであり、かつその中身はSQLにマッピングできる型であるか、のような検証
 
 
 
-Domalaのアノテーション
------
+**Domala**のアノテーション
 
 | Doma2 |  | Domala |
 |:-----------|:------:|:------------|
@@ -1219,20 +1217,18 @@ Step2の課題
 DomalaとIDE
 -----
 
-IntelliJ IDEA + Scala pluginでも開発できます
+IntelliJ IDEA + Scala pluginでも開発できます<!-- .element: style="font-size:80%; -->
 
 ![idea-error](./idea-error.png)
 
 
 
-アノテーション横の謎のボタン
+アノテーション横の謎のボタン<!-- .element: style="font-size:80%; -->
 ![idea-expand1](./idea-expand1.png)
 
 
 
-押すとマクロの結果が見れます
-
-そのままデバッグもできます
+押すとマクロの結果が見れます<!-- .element: style="font-size:80%; -->
 
 ![idea-expand2](./idea-expand2.png)
 
@@ -1249,16 +1245,16 @@ DomalaでStream検索
   def selectAll[R](mapper: Stream[Emp] => R): R
 ```
 
-ScalaではFunction&lt;T, R&gt;は T => Rと書けます
+ScalaではFunction&lt;T, R&gt;は T => Rと書けます<!-- .element: style="font-size:80%; -->
 
 
 
 DomalaでStream検索
 -----
 
-ScalaのStreamは気を付けて書かないとメモリを逼迫するのでSelectType.ITERATORを追加してます
+ScalaのStreamは気を付けて書かないとメモリを逼迫するのでSelectType.ITERATORを追加してます<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
-toStreamでStreamに変換もできるのでこちらだけでもいいかもしれません
+toStreamでStreamに変換もできるのでこちらだけでもいいかもしれません<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
 ```scala
   @Select(
@@ -1277,7 +1273,9 @@ toStreamでStreamに変換もできるのでこちらだけでもいいかもし
 DomalaでEnum
 -----
 
-ScalaにはEnumerationという列挙型がありますが、いろいろといけてないのでDomalaでは対応していません。代わりにsealed<span style="font-size:60%">*1</span> abstract classに@Holderを注釈して表現できます
+ScalaにはEnumerationという列挙型がありますが、使いにくいのでDomalaでは対応していません。代わりにsealed<span style="font-size:60%">*1</span> abstract classに@Holderを注釈して表現できます
+
+<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
 ```scala
 @Holder
@@ -1294,11 +1292,11 @@ object Sex {
 
 DomalaのもうひとつのHolder
 -----
-Scalaではvalue classという実行時に参照割り当てが行われない特殊なクラスを定義できます
+Scalaではvalue classという実行時に参照割り当てが行われない特殊なクラスを定義できます<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
-value classは任意のクラスをAnyValのサブクラスにすることで定義できます
+value classは任意のクラスをAnyValのサブクラスにすることで定義できます<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
-Domalaではこのvalue classをHolderの代わりにEnitityのフィールドとして持つことができます
+Domalaではこのvalue classをHolderの代わりにEnitityのフィールドとして持つことができます<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
 ```scala
 // Annotation is not necessary
@@ -1311,7 +1309,7 @@ http://docs.scala-lang.org/overviews/core/value-classes.html<!-- .element: style
 
 DomalaでREPL
 -----
-scalameta paradiseはREPLで利用できないため、簡易Daoとしてstring interpolationを用意しています
+scalameta paradiseはREPLで利用できないため、簡易Daoとしてstring interpolationを用意しています<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
 ```sh
 sbt> console
