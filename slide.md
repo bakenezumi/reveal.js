@@ -260,7 +260,7 @@ lazy val root = (project in file(".")).
 
 
 
-Domain, Enity, Dao及びSQLはそのまま使います
+Step1ではDomain, Enity, Dao, SQLはそのまま使います
 
 アプリをJavaからScalaにします
 
@@ -408,6 +408,18 @@ Doma関連クラスもScalaで作る
 
 
 
+Step2 Domain  (Scala)
+
+```scala
+// Domainクラスにはvalueのgetter（getValue）が必要
+// @scala.beans.BeanPropertyはgetterとsetterを作ってくれる
+@Domain(valueType = classOf[Long])
+case class ID[ENTITY](
+  @BeanProperty value: Long)
+```
+
+
+
 Step2 Entity (Scala)
 
 ```scala
@@ -431,18 +443,6 @@ case class Emp(
   def growOld: Emp = this.copy(age = this.age + 1)
 }
 
-```
-
-
-
-Step2 Domain  (Scala)
-
-```scala
-// Domainクラスにはvalueのgetter（getValue）が必要
-// @scala.beans.BeanPropertyはgetterとsetterを作ってくれる
-@Domain(valueType = classOf[Long])
-case class ID[ENTITY](
-  @BeanProperty value: Long)
 ```
 
 
@@ -986,6 +986,15 @@ lazy val metaMacroSettings: Seq[Def.Setting[_]] = Seq(
 
 
 
+Domala Holder (Scala)
+
+```scala
+@Holder
+case class ID[ENTITY](value: Long)
+```
+
+
+
 Domala Entity (Scala)
 
 ```scala
@@ -1001,15 +1010,6 @@ case class Emp(
   version: Int) {
   def growOld: Emp = this.copy(age = this.age + 1)
 }
-```
-
-
-
-Domala Holder (Scala)
-
-```scala
-@Holder
-case class ID[ENTITY](value: Long)
 ```
 
 
