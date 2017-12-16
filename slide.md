@@ -299,6 +299,14 @@ object SampleApp1 extends App {
 
 
 
+Step1 Daoの利用 (Scala)
+
+Javaとの比較<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
+
+![diff1](./step1-diff.png)
+
+
+
 Step1 compile & run
 
 そのままではコンパイルが失敗<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
@@ -449,7 +457,7 @@ case class Emp(
 
 case classについて
 
-EntityとDomainですが、アノテーションが少し増えてしまいましたが実装はだいぶ減りました<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
+DomainとEntityですが、アノテーションが少し増えてしまいましたが実装はだいぶ減りました<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
 Scalaではcase classと定義するとhashCode()、equals()、toString()、等がコンパイル時に自動生成されるためこの恩恵を受けています<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
 
@@ -537,6 +545,15 @@ object SampleApp2 extends App {
 }
 
 ```
+
+
+
+Step2 Daoの利用 (Scala)
+
+Step1との比較<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px" -->
+
+![diff1](./step2-diff.png)
+
 
 
 
@@ -657,7 +674,7 @@ EmpDaoImpl.javaが作られない
 
 
 
-ビルドを3フェーズに分けた
+ビルドを3フェーズに分けました
 
 1. Doma関連クラスのソース(.scala)をコンパイル<!-- .element class="fragment" -->
 
@@ -1119,52 +1136,23 @@ Domalaでは、<!-- .element style="text-align:left;font-size:80%"-->
 
 
 
-Javaとのdiff
-```diff
-- private static final EmpDao dao = new EmpDaoImpl();
-+ private implicit lazy val config: Config = AppConfig
-+ private lazy val dao: EmpDao = EmpDao.impl
-- AppConfig.singleton().getTransactionManager().required(() -> {
-+   Required {
--   dao.create();
-+   dao.create()
--   final List<Result<Emp>> inserted = Stream.of(
-+   val inserted = Seq(
--     new Emp(ID.of(-1), "scott", 10, -1),
-+     Emp(ID(-1), "scott", 10, -1),
--     new Emp(ID.of(-1), "allen", 20, -1)
-+     Emp(ID(-1), "allen", 20, -1)
--   ).map(dao::insert)
--     .collect(Collectors.toList());
-+   ).map(dao.insert)
--   System.out.println(inserted);
-+   println(inserted)
-```
+Domala Daoの利用 (Scala)
+
+Step2との比較<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px; margin-bottom: 5px" -->
+
+![diff3](./step3-diff1.png)
+
+<!-- .element: style="margin-top: 0px" -->
 
 
 
-Javaとのdiff
-```diff
--   final Optional<Result<Emp>> updated =
-+   val updated =
-      dao
--       .selectById(ID.of(2))
-+       .selectById(ID(2))
--       .map(Emp::grawOld)
-+       .map(_.growOld)
--       .map(dao::update);
-+       .map(dao.update)
--   System.out.println(updated);
-+   println(updated)
--   dao.selectAll().forEach(System.out::println);
-+   dao.selectAll.foreach(println)
-  }
-```
-そんなに変わってない。。気もしますが逆に<!-- .element style="font-size:80%"-->
+Domala Daoの利用 (Scala)
 
-Javaユーザーは違和感なくScala & Domalaを使えるのではと<!-- .element style="font-size:80%"-->
+Javaとの比較<!-- .element: style="font-size:80%; text-align:left; margin-left: 30px; margin-bottom: 5px" -->
 
-考えてます！<!-- .element style="font-size:80%"-->
+![diff3](./step3-diff0.png)
+
+<!-- .element: style="margin-top: 0px" -->
 
 
 
