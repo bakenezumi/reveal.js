@@ -466,9 +466,10 @@ Scalaではcase classと定義するとhashCode()、equals()、toString()、等�
 Step2 Dao (Scala)
 
 ```scala
-// Scalaで作ったConfigはstaticメソッドを持てず
+// Scalaで作ったConfigは@SingletonConfigにできず
 // アノテーション引数に指定できないため
 // 利用者がコンストラクタパラメータで渡す
+// https://twitter.com/gakuzzzz/status/941927709977886722
 @Dao
 trait EmpDao {
   @Select
